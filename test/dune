@@ -1,2 +1,5 @@
 (test
- (name slippi_parser))
+ (name slippi_parser)
+ (libraries ounit2 slippi_parser)
+ (action
+  (run %{test})))

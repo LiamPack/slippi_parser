@@ -1,0 +1,8 @@
+version=0.21.0
+profile=janestreet
+wrap-comments=false
+doc-comments=after-when-possible
+align-cases=true
+align-constructors-decl
+let-binding-spacing=sparse
+module-item-spacing=sparse

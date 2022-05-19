@@ -17,7 +17,7 @@
  (name slippi_parser)
  (synopsis "A parser for the `.slp` file format")
  (description "A parser for the `.slp` file format. While `.slp` files adhere to the UBJSON spec (see https://github.com/project-slippi/slippi-wiki/blob/master/SPEC.md#ubjson), the `raw` element contains packaged information in a specific format described only by the `.slp` spec.")
- (depends ocaml dune ounit2)
+ (depends ocaml dune angstrom ounit2)
  (tags
   (topics "to describe" your project)))
 

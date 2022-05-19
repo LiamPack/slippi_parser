@@ -1,2 +1,3 @@
 (library
- (name slippi_parser))
+ (name slippi_parser)
+ (libraries angstrom))
