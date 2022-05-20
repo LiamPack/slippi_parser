@@ -1,3 +1,4 @@
 (library
  (name slippi_parser)
- (libraries angstrom))
+ (libraries angstrom unix)
+ (preprocess (pps ppx_deriving.show ppx_deriving.map ppx_deriving.iter ppx_deriving.fold)))

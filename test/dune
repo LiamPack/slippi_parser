@@ -1,5 +1,8 @@
-(test
+(rule (copy raw.slp raw1.slp))
+
+
+(library
  (name run_tests)
- (libraries ounit2 slippi_parser)
- (action
-  (run %{test})))
+ (libraries slippi_parser ppx_inline_test)
+ (inline_tests)
+ (preprocess (pps  ppx_inline_test)))

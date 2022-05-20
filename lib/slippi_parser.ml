@@ -108,16 +108,23 @@ type event =
   | FrameStart      of frame_start
   | ItemUpdate      of item_update
   | FrameBookend    of frame_bookend
+  | GeckoList       of unit
   | Unimplemented   of string
-(* | GeckoList       of gecko_list *)
+[@@deriving show]
 
 let peek1 = peek_char_fail >>| fun x -> x
 
 let take1 = take 1 >>| fun x -> String.get x 0
 
-let any_int_of_int32 =
+let any_int_of_uint32 =
   let open BE in
-  any_int32 >>| Int32.to_int
+  any_int32
+  >>= fun i ->
+  match Int32.unsigned_to_int i with
+  | Some x ->
+    (* print_endline @@ Int32.to_string i ^ "To " ^ string_of_int x; *)
+    return x
+  | None   -> fail "unsigned int32 conversion failed"
 
 
 let print_unimplemented e =
@@ -129,10 +136,15 @@ let print_unimplemented e =
         | Unimplemented s ->
           print_endline s;
           print_endline "";
-          print_endline ""
-        | _               -> print_endline "clean")
+          print_endline "";
+          ()
+        | _               ->
+          print_endline "clean";
+          ())
       e
-  | _    -> [ print_endline "idk" ]
+  | _    ->
+    print_endline "idk";
+    [ () ]
 
 
 module E = struct
@@ -181,11 +193,11 @@ module G = struct
     >>= fun version ->
     game_info_block
     >>= fun game_block_info ->
-    any_int_of_int32
+    any_int_of_uint32
     >>= fun random_seed ->
-    count 4 any_int_of_int32
+    count 4 any_int_of_uint32
     >>= fun dashback_fix ->
-    count 4 any_int_of_int32
+    count 4 any_int_of_uint32
     >>= fun shield_drop_fix ->
     count 4 (take 16)
     >>= fun nametags ->
@@ -232,14 +244,14 @@ end
 module Frames = struct
   let parse_scene_frame_counter v =
     if v.major >= 3 && v.minor >= 10
-    then any_int_of_int32 >>| fun x -> Some x
+    then any_int_of_uint32 >>| fun x -> Some x
     else return None
 
 
   let frame_start =
-    any_int_of_int32
+    any_int_of_uint32
     >>= fun frame_number ->
-    any_int_of_int32
+    any_int_of_uint32
     >>= fun random_seed ->
     parse_scene_frame_counter { major = 3; minor = 9; build = 0; unused = 0 }
     >>| fun scene_frame_counter ->
@@ -247,22 +259,22 @@ module Frames = struct
 
 
   let frame_bookend =
-    any_int_of_int32
+    any_int_of_uint32
     >>= fun frame_number ->
-    any_int_of_int32
+    any_int_of_uint32
     >>| function
     | latest_finalized_frame -> FrameBookend { frame_number; latest_finalized_frame }
 
 
   let pre_frame_update =
     let open BE in
-    any_int_of_int32
+    any_int_of_uint32
     >>= fun frame_number ->
     any_int8
     >>= fun player_index ->
     any_int8
     >>= fun is_follower ->
-    any_int_of_int32
+    any_int_of_uint32
     >>= fun random_seed ->
     any_int16
     >>= fun action_state_id ->
@@ -282,7 +294,7 @@ module Frames = struct
     >>= fun c_stick_y ->
     any_float
     >>= fun trigger ->
-    any_int_of_int32
+    any_int_of_uint32
     >>= fun processed_buttons ->
     any_int16
     >>= fun physical_buttons ->
@@ -319,13 +331,13 @@ module Frames = struct
 
   let parse_animation_index v =
     if v.major >= 3 && v.minor >= 11
-    then any_int_of_int32 >>| fun x -> Some x
+    then any_int_of_uint32 >>| fun x -> Some x
     else return None
 
 
   let post_frame_update =
     let open BE in
-    any_int_of_int32
+    any_int_of_uint32
     >>= fun frame_number ->
     any_uint8
     >>= fun player_index ->
@@ -444,30 +456,22 @@ module Util = struct
     res
 end
 
-let _event : char -> event t = function
-  (* | '\053' -> return 0 *)
-  | '\054' -> G.game_start
-  | '\055' -> Frames.pre_frame_update
-  | '\056' -> Frames.post_frame_update
-  | '\057' -> G.game_end
-  | '\058' -> Frames.frame_start
-  (* | '\059' -> item_update *)
-  | '\060' -> Frames.frame_bookend
-  (* | '\061' -> gecko_list *)
-  (* | '\016' -> partial_message *)
-  | _ -> fail "Event not yet supported"
-
-
-let slippi =
-  let f =
-    E.all_payload_sizes
-    >>= function
-    | payload_map ->
-      let event =
-        take1
-        >>= fun c ->
-        _event c <|> (take (E.CharMap.find c payload_map) >>| fun s -> Unimplemented s)
-      in
-      many event
-  in
-  f <?> "Slippi"
+let slippi_raw =
+  E.all_payload_sizes
+  >>= function
+  | payload_map ->
+    let event =
+      take1
+      >>= function
+      | '\054' -> G.game_start
+      | '\055' -> Frames.pre_frame_update
+      | '\056' -> Frames.post_frame_update
+      | '\057' -> G.game_end
+      | '\058' -> Frames.frame_start
+      (* | '\059' -> item_update *)
+      | '\060' -> Frames.frame_bookend
+      (* | '\061' -> gecko_list *)
+      (* | '\016' -> partial_message *)
+      | c -> take (E.CharMap.find c payload_map) >>| fun s -> Unimplemented s
+    in
+    many event <?> "slippi_raw parsing"

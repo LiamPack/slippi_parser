@@ -13,7 +13,8 @@ depends: [
   "ocaml"
   "dune" {>= "3.0"}
   "angstrom"
-  "ounit2"
+  "ppx_inline_test"
+  "unix"
   "odoc" {with-doc}
 ]
 build: [

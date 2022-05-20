@@ -1,6 +1,10 @@
-open OUnit2
-(* open Slippi_parser *)
-(* open Angstrom *)
+open Slippi_parser
+open Angstrom
 
-let _ =
-  "test suite slippi_parser" >::: [ ("placeholder" >:: fun _ -> assert_equal true true) ]
+let%test "placeholder" =
+  let fn = Util.read_whole_file "raw.slp" in
+  match parse_string ~consume:All slippi_raw fn with
+  | Ok _      -> true
+  | Error msg ->
+    print_endline msg;
+    false
