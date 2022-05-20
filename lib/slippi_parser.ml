@@ -27,7 +27,7 @@ type game_start =
 type pre_frame_update =
   { frame_number : int
   ; player_index : int
-  ; is_follower : int
+  ; is_follower : int (* bool-ish *)
   ; random_seed : int
   ; action_state_id : int
   ; x_position : float
@@ -44,6 +44,42 @@ type pre_frame_update =
   ; physical_r_trigger : float
   ; x_analog_ucf : int
   ; percent : float
+  }
+
+type post_frame_update =
+  { frame_number : int
+  ; player_index : int (* 32 *)
+  ; is_follower : int (* bool-ish *)
+  ; internal_character_id : int
+  ; action_state_id : int (* 16 *)
+  ; x_position : float
+  ; y_position : float
+  ; facing_direction : float
+  ; percent : float
+  ; shield_size : float
+  ; last_hitting_attack_id : int
+  ; current_combo_count : int
+  ; last_hit_by : int
+  ; stocks_remaining : int
+  ; action_state_frame_counter : float
+  ; state_bit_flags_1 : int
+  ; state_bit_flags_2 : int
+  ; state_bit_flags_3 : int
+  ; state_bit_flags_4 : int
+  ; state_bit_flags_5 : int
+  ; misc_as : float
+  ; ground_air_state : int (* bool-ish *)
+  ; last_ground_id : int (* 16 *)
+  ; jumps_remaining : int
+  ; l_cancel_status : int (* 0 = none, 1 = success, 2 = unsuccess *)
+  ; hurtbox_collision_state : int (* 0 = vuln, 1 = invuln, 2 = intang *)
+  ; self_induced_air_x_speed : float
+  ; self_induced_air_y_speed : float
+  ; attack_based_x_speed : float
+  ; attack_based_y_speed : float
+  ; self_induced_ground_x_speed : float
+  ; hitlag_frames_remaining : float (* 0 = "not in hitlag" *)
+  ; animation_index : int option (* 32 !!! 3.11.0 *)
   }
 
 type game_end =
@@ -67,7 +103,7 @@ type frame_bookend =
 type event =
   | GameStart       of game_start
   | PreFrameUpdate  of pre_frame_update
-  | PostFrameUpdate of unit
+  | PostFrameUpdate of post_frame_update
   | GameEnd         of game_end
   | FrameStart      of frame_start
   | ItemUpdate      of item_update
@@ -279,6 +315,117 @@ module Frames = struct
       ; x_analog_ucf
       ; percent
       }
+
+
+  let parse_animation_index v =
+    if v.major >= 3 && v.minor >= 11
+    then any_int_of_int32 >>| fun x -> Some x
+    else return None
+
+
+  let post_frame_update =
+    let open BE in
+    any_int_of_int32
+    >>= fun frame_number ->
+    any_uint8
+    >>= fun player_index ->
+    any_uint8
+    >>= fun is_follower ->
+    any_uint8
+    >>= fun internal_character_id ->
+    any_uint16
+    >>= fun action_state_id ->
+    any_float
+    >>= fun x_position ->
+    any_float
+    >>= fun y_position ->
+    any_float
+    >>= fun facing_direction ->
+    any_float
+    >>= fun percent ->
+    any_float
+    >>= fun shield_size ->
+    any_uint8
+    >>= fun last_hitting_attack_id ->
+    any_uint8
+    >>= fun current_combo_count ->
+    any_uint8
+    >>= fun last_hit_by ->
+    any_uint8
+    >>= fun stocks_remaining ->
+    any_float
+    >>= fun action_state_frame_counter ->
+    any_uint8
+    >>= fun state_bit_flags_1 ->
+    any_uint8
+    >>= fun state_bit_flags_2 ->
+    any_uint8
+    >>= fun state_bit_flags_3 ->
+    any_uint8
+    >>= fun state_bit_flags_4 ->
+    any_uint8
+    >>= fun state_bit_flags_5 ->
+    any_float
+    >>= fun misc_as ->
+    any_uint8
+    >>= fun ground_air_state ->
+    any_uint16
+    >>= fun last_ground_id ->
+    any_uint8
+    >>= fun jumps_remaining ->
+    any_uint8
+    >>= fun l_cancel_status ->
+    any_uint8
+    >>= fun hurtbox_collision_state ->
+    any_float
+    >>= fun self_induced_air_x_speed ->
+    any_float
+    >>= fun self_induced_air_y_speed ->
+    any_float
+    >>= fun attack_based_x_speed ->
+    any_float
+    >>= fun attack_based_y_speed ->
+    any_float
+    >>= fun self_induced_ground_x_speed ->
+    any_float
+    >>= fun hitlag_frames_remaining ->
+    parse_animation_index { major = 3; minor = 9; build = 0; unused = 0 }
+    >>| fun animation_index ->
+    PostFrameUpdate
+      { frame_number : int
+      ; player_index : int (* 32 *)
+      ; is_follower : int (* bool-ish *)
+      ; internal_character_id : int
+      ; action_state_id : int (* 16 *)
+      ; x_position : float
+      ; y_position : float
+      ; facing_direction : float
+      ; percent : float
+      ; shield_size : float
+      ; last_hitting_attack_id : int
+      ; current_combo_count : int
+      ; last_hit_by : int
+      ; stocks_remaining : int
+      ; action_state_frame_counter : float
+      ; state_bit_flags_1 : int
+      ; state_bit_flags_2 : int
+      ; state_bit_flags_3 : int
+      ; state_bit_flags_4 : int
+      ; state_bit_flags_5 : int
+      ; misc_as : float
+      ; ground_air_state : int (* bool-ish *)
+      ; last_ground_id : int (* 16 *)
+      ; jumps_remaining : int
+      ; l_cancel_status : int (* 0 = none, 1 = success, 2 = unsuccess *)
+      ; hurtbox_collision_state : int (* 0 = vuln, 1 = invuln, 2 = intang *)
+      ; self_induced_air_x_speed : float
+      ; self_induced_air_y_speed : float
+      ; attack_based_x_speed : float
+      ; attack_based_y_speed : float
+      ; self_induced_ground_x_speed : float
+      ; hitlag_frames_remaining : float (* 0 = "not in hitlag" *)
+      ; animation_index : int option (* 32 !!! 3.11.0 *)
+      }
 end
 
 module Util = struct
@@ -301,7 +448,7 @@ let _event : char -> event t = function
   (* | '\053' -> return 0 *)
   | '\054' -> G.game_start
   | '\055' -> Frames.pre_frame_update
-  (* | '\056' -> Frames.post_frame_update *)
+  | '\056' -> Frames.post_frame_update
   | '\057' -> G.game_end
   | '\058' -> Frames.frame_start (* TODO: broken *)
   (* | '\059' -> item_update *)
