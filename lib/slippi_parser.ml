@@ -450,7 +450,7 @@ let _event : char -> event t = function
   | '\055' -> Frames.pre_frame_update
   | '\056' -> Frames.post_frame_update
   | '\057' -> G.game_end
-  | '\058' -> Frames.frame_start (* TODO: broken *)
+  | '\058' -> Frames.frame_start
   (* | '\059' -> item_update *)
   | '\060' -> Frames.frame_bookend
   (* | '\061' -> gecko_list *)
