@@ -11,7 +11,8 @@ type game_start =
   { version : version
   ; game_block_info : string
   ; random_seed : int (* int32 *)
-  ; dashback_fix : int list (* int32 * 4 *)
+  ; dashback_fix : int list (* int8 * 4 in one 32bit value *)
+  ; shield_drop_fix : int list (* int8 * 4 in one 32bit value *)
   ; nametags : string list (* just a string list for now *)
   ; pal : int
   ; frozen_ps : int
@@ -19,8 +20,8 @@ type game_start =
   ; major_scene : int (* u8, 0x2 in VS mode, 0x8 online *)
   ; display_names : string list (* just a big string for now *)
   ; connect_codes : string list
-  ; slippi_uids : string list (* just a big string for now *)
-  ; language_option : int (* u8, 0 for jp, 1 for en *)
+  ; slippi_uids : string list option
+  ; language_option : int option (* u8, 0 for jp, 1 for en *)
   }
 
 type pre_frame_update =
@@ -53,7 +54,7 @@ type game_end =
 type frame_start =
   { frame_number : int
   ; random_seed : int
-  ; scene_frame_counter : int
+  ; scene_frame_counter : int option
   }
 
 type item_update = unit
@@ -71,6 +72,7 @@ type event =
   | FrameStart      of frame_start
   | ItemUpdate      of item_update
   | FrameBookend    of frame_bookend
+  | Unimplemented   of string
 (* | GeckoList       of gecko_list *)
 
 let peek1 = peek_char_fail >>| fun x -> x
@@ -82,49 +84,73 @@ let any_int_of_int32 =
   any_int32 >>| Int32.to_int
 
 
+let print_unimplemented e =
+  match e with
+  | Ok e ->
+    List.map
+      (fun r ->
+        match r with
+        | Unimplemented s ->
+          print_endline s;
+          print_endline "";
+          print_endline ""
+        | _               -> print_endline "clean")
+      e
+  | _    -> [ print_endline "idk" ]
+
+
 module E = struct
-  module IntMap = Map.Make (Int)
+  module CharMap = Map.Make (Char)
 
-  let _event_payload_size : int t = char '\053' *> any_uint8 >>| fun ps -> ps
+  let event_payload_size = char '\053' *> any_uint8
 
-  let _other_event_payload = any_uint8 >>= fun cb -> BE.any_uint16 >>| fun ps -> cb, ps
+  let other_event_payload = take1 >>= fun cb -> BE.any_uint16 >>| fun ps -> cb, ps
 
-  let _payload_sizes_map n =
-    count n _other_event_payload
-    >>| fun s -> List.fold_left (fun m (k, v) -> IntMap.add k v m) IntMap.empty s
-
-
-  let _all_payload_sizes =
-    _event_payload_size
-    >>= fun payload_size -> _payload_sizes_map ((payload_size - 1) / 3) >>| fun m -> m
+  let payload_sizes_map n =
+    count n other_event_payload
+    >>| fun s -> List.fold_left (fun m (k, v) -> CharMap.add k v m) CharMap.empty s
 
 
-  let _all_payload_sizes_record =
-    _event_payload_size
-    >>= fun payload_size ->
-    count ((payload_size - 1) / 3) _other_event_payload >>| fun m -> m
+  let all_payload_sizes =
+    event_payload_size >>= fun payload_size -> payload_sizes_map ((payload_size - 1) / 3)
+
+
+  let all_payload_sizes_record =
+    event_payload_size
+    >>= fun payload_size -> count ((payload_size - 1) / 3) other_event_payload
 end
 
 module G = struct
-  let _version =
+  let version =
     count 4 any_uint8
     >>= function
-    | [ a; b; c; d ] -> return { major = a; minor = b; build = c; unused = d }
-    | _              -> fail "_version more than 4 versions"
+    | [ major; minor; build; unused ] -> return { major; minor; build; unused }
+    | _ -> fail "_version not equal to 4 pieces"
 
 
-  let _game_info_block = take 312
+  let game_info_block = take 312
 
-  let _game_start =
-    let open BE in
-    _version
+  let parse_slippi_uids v =
+    if v.major >= 3 && v.minor >= 11
+    then count 4 (take 29) >>| fun x -> Some x
+    else return None
+
+
+  let parse_language_option v =
+    if v.major >= 3 && v.minor >= 11 then any_uint8 >>| fun x -> Some x else return None
+
+
+  let game_start =
+    version
     >>= fun version ->
-    _game_info_block
+    game_info_block
     >>= fun game_block_info ->
     any_int_of_int32
     >>= fun random_seed ->
     count 4 any_int_of_int32
     >>= fun dashback_fix ->
+    count 4 any_int_of_int32
+    >>= fun shield_drop_fix ->
     count 4 (take 16)
     >>= fun nametags ->
     any_uint8
@@ -135,19 +161,20 @@ module G = struct
     >>= fun minor_scene ->
     any_uint8
     >>= fun major_scene ->
-    count 4 (take 16)
+    count 4 (take 31)
     >>= fun display_names ->
     count 4 (take 10)
     >>= fun connect_codes ->
-    count 4 (take 29)
+    parse_slippi_uids version
     >>= fun slippi_uids ->
-    any_uint8
+    parse_language_option version
     >>| fun language_option ->
     GameStart
       { version
       ; game_block_info
       ; random_seed
       ; dashback_fix
+      ; shield_drop_fix
       ; nametags
       ; pal
       ; frozen_ps
@@ -160,26 +187,30 @@ module G = struct
       }
 
 
-  let _game_end =
+  let game_end =
     any_uint8
     >>= fun game_end_method ->
     any_int8 >>| fun lras_initiator -> GameEnd { game_end_method; lras_initiator }
 end
 
 module Frames = struct
-  let _frame_start =
-    let open BE in
+  let parse_scene_frame_counter v =
+    if v.major >= 3 && v.minor >= 10
+    then any_int_of_int32 >>| fun x -> Some x
+    else return None
+
+
+  let frame_start =
     any_int_of_int32
     >>= fun frame_number ->
     any_int_of_int32
     >>= fun random_seed ->
-    any_int_of_int32
+    parse_scene_frame_counter { major = 3; minor = 9; build = 0; unused = 0 }
     >>| fun scene_frame_counter ->
     FrameStart { frame_number; random_seed; scene_frame_counter }
 
 
-  let _frame_bookend =
-    let open BE in
+  let frame_bookend =
     any_int_of_int32
     >>= fun frame_number ->
     any_int_of_int32
@@ -187,7 +218,7 @@ module Frames = struct
     | latest_finalized_frame -> FrameBookend { frame_number; latest_finalized_frame }
 
 
-  let _pre_frame_update =
+  let pre_frame_update =
     let open BE in
     any_int_of_int32
     >>= fun frame_number ->
@@ -256,29 +287,40 @@ module Util = struct
     let s = really_input_string ch (in_channel_length ch) in
     close_in ch;
     s
+
+
+  (* From https://www.systutorials.com/how-to-measure-a-functions-execution-time-in-ocaml/ *)
+  let time f =
+    let t = Unix.gettimeofday () in
+    let res = f () in
+    Printf.printf "Execution time: %f secondsn" (Unix.gettimeofday () -. t);
+    res
 end
 
 let _event : char -> event t = function
   (* | '\053' -> return 0 *)
-  | '\054' -> G._game_start
-  | '\055' -> Frames._pre_frame_update
-  (* | '\056' -> Frames._post_frame_update *)
-  | '\057' -> G._game_end
-  | '\058' -> Frames._frame_start
-  (* | '\059' -> _item_update *)
-  | '\060' -> Frames._frame_bookend
-  (* | '\061' -> _gecko list *)
-  (* | '\010' -> _partial_message *)
+  | '\054' -> G.game_start
+  | '\055' -> Frames.pre_frame_update
+  (* | '\056' -> Frames.post_frame_update *)
+  | '\057' -> G.game_end
+  | '\058' -> Frames.frame_start (* TODO: broken *)
+  (* | '\059' -> item_update *)
+  | '\060' -> Frames.frame_bookend
+  (* | '\061' -> gecko_list *)
+  (* | '\016' -> partial_message *)
   | _ -> fail "Event not yet supported"
 
 
 let slippi =
-  let f _ =
-    peek_char_fail
+  let f =
+    E.all_payload_sizes
     >>= function
-    | c ->
-      (match c with
-      | '{' -> take 15 *> E._all_payload_sizes_record
-      | _   -> E._all_payload_sizes_record)
+    | payload_map ->
+      let event =
+        take1
+        >>= fun c ->
+        _event c <|> (take (E.CharMap.find c payload_map) >>| fun s -> Unimplemented s)
+      in
+      many event
   in
-  fix f <?> "slippi"
+  f <?> "Slippi"
