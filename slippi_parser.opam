@@ -15,6 +15,7 @@ depends: [
   "angstrom"
   "ppx_inline_test"
   "unix"
+  "batteries"
   "odoc" {with-doc}
 ]
 build: [

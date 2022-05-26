@@ -1,3 +1,4 @@
+open Batteries
 open Angstrom
 
 type version =
@@ -110,7 +111,6 @@ type event =
   | FrameBookend    of frame_bookend
   | GeckoList       of unit
   | Unimplemented   of string
-[@@deriving show]
 
 let peek1 = peek_char_fail >>| fun x -> x
 
@@ -126,11 +126,16 @@ let any_int_of_uint32 =
     return x
   | None   -> fail "unsigned int32 conversion failed"
 
+let any_int_of_int32 =
+  let open BE in
+  any_int32
+  >>| fun i ->
+  Int32.to_int i
 
 let print_unimplemented e =
   match e with
   | Ok e ->
-    List.map
+    BatList.map
       (fun r ->
         match r with
         | Unimplemented s ->
@@ -156,7 +161,7 @@ module E = struct
 
   let payload_sizes_map n =
     count n other_event_payload
-    >>| fun s -> List.fold_left (fun m (k, v) -> CharMap.add k v m) CharMap.empty s
+    >>| fun s -> BatList.fold_left (fun m (k, v) -> CharMap.add k v m) CharMap.empty s
 
 
   let all_payload_sizes =
@@ -249,7 +254,7 @@ module Frames = struct
 
 
   let frame_start =
-    any_int_of_uint32
+    any_int_of_int32
     >>= fun frame_number ->
     any_int_of_uint32
     >>= fun random_seed ->
@@ -259,7 +264,7 @@ module Frames = struct
 
 
   let frame_bookend =
-    any_int_of_uint32
+    any_int_of_int32
     >>= fun frame_number ->
     any_int_of_uint32
     >>| function
@@ -268,7 +273,7 @@ module Frames = struct
 
   let pre_frame_update =
     let open BE in
-    any_int_of_uint32
+    any_int_of_int32
     >>= fun frame_number ->
     any_int8
     >>= fun player_index ->
@@ -337,7 +342,7 @@ module Frames = struct
 
   let post_frame_update =
     let open BE in
-    any_int_of_uint32
+    any_int_of_int32
     >>= fun frame_number ->
     any_uint8
     >>= fun player_index ->
@@ -442,10 +447,7 @@ end
 
 module Util = struct
   let read_whole_file filename =
-    let ch = open_in filename in
-    let s = really_input_string ch (in_channel_length ch) in
-    close_in ch;
-    s
+    BatFile.with_file_in filename (fun io -> BatIO.read_all io)
 
 
   (* From https://www.systutorials.com/how-to-measure-a-functions-execution-time-in-ocaml/ *)

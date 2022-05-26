@@ -1,4 +1,4 @@
 (executable
  (public_name slippi_parser)
  (name main)
- (libraries slippi_parser))
+ (libraries slippi_parser batteries angstrom))
