@@ -19,7 +19,7 @@ let get_distances slp =
         match x with
         | PostFrameUpdate c -> if c.frame_number >= 0 then Some c else None
         | _                 -> None)
-      q
+      slp
   in
   let grouped_by_player =
     BatList.group
