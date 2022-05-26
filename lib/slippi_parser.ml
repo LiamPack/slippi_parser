@@ -126,11 +126,11 @@ let any_int_of_uint32 =
     return x
   | None   -> fail "unsigned int32 conversion failed"
 
+
 let any_int_of_int32 =
   let open BE in
-  any_int32
-  >>| fun i ->
-  Int32.to_int i
+  any_int32 >>| fun i -> Int32.to_int i
+
 
 let print_unimplemented e =
   match e with
@@ -477,3 +477,16 @@ let slippi_raw =
       | c -> take (E.CharMap.find c payload_map) >>| fun s -> Unimplemented s
     in
     many event <?> "slippi_raw parsing"
+
+
+let parse_slippi s =
+  match String.get s 0 with
+  | '{' ->
+    parse_string ~consume:All slippi_raw
+    @@ String.sub
+         s
+         15
+         (String.sub s 11 4
+         |> Bytes.of_string
+         |> fun x -> Bytes.get_int32_be x 0 |> Int32.to_int)
+  | _   -> parse_string ~consume:All slippi_raw s
