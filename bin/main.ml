@@ -1,4 +1,4 @@
-(* open Slippi_parser *)
+open Slippi_parser
 open Angstrom
 open Batteries
 
