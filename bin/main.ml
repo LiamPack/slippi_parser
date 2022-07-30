@@ -4,12 +4,9 @@ open Batteries
 
 let get_parsed () =
   let fn = Util.read_whole_file "../test/raw.slp" in
-  let q =
-    match parse_string ~consume:All slippi_raw fn with
-    | Ok c      -> c
-    | Error msg -> failwith msg
-  in
-  q
+  match parse_string ~consume:All slippi_raw fn with
+  | Ok c      -> c
+  | Error msg -> failwith msg
 
 
 let get_distances slp =
@@ -43,4 +40,9 @@ let get_distances slp =
 
 let close_distances d distances =
   let closer = BatList.group_consecutive (fun x y -> x < d && y < d) distances in
-  BatList.filteri_map (fun i x -> if BatList.length x > 10 then Some (i, BatList.length x) else None) closer
+  BatList.filteri_map
+    (fun i x -> if BatList.length x > 10 then Some (i, BatList.length x) else None)
+    closer
+
+
+let _ = close_distances 10. @@ get_distances @@ get_parsed ()
